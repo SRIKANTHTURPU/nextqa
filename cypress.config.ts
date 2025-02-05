@@ -1,7 +1,9 @@
-import { defineConfig } from "cypress";
 import { addCucumberPreprocessorPlugin } from "@badeball/cypress-cucumber-preprocessor";
+import createEsbuildPlugin from "@badeball/cypress-cucumber-preprocessor/esbuild";
 import createBundler from "@bahmutov/cypress-esbuild-preprocessor";
-import { createEsbuildPlugin } from "@badeball/cypress-cucumber-preprocessor/esbuild";
+import { defineConfig } from "cypress";
+import fix from "cypress-on-fix";
+import { configureXrayPlugin, syncFeatureFile } from "cypress-xray-plugin";
 require("dotenv").config();
 
 export default defineConfig({
@@ -12,7 +14,7 @@ export default defineConfig({
       ...process.env,
       stepDefinitions: "cypress/e2e/step-definitions/**/*.cy.{js,ts}",
     },
-    // 👇 Define where Cypress should look for step definitions
+    // Define where Cypress should look for step definitions
     experimentalRunAllSpecs: true,
     // ✅ Override existing reports instead of generating new ones
     reporter: "mocha-multi-reporters",
@@ -20,29 +22,47 @@ export default defineConfig({
       reporterEnabled: "mochawesome, mocha-junit-reporter",
       mochawesomeReporterOptions: {
         reportDir: "cypress/reports/mochawesome",
-        overwrite: true, // 👈 Ensure reports are overridden
+        overwrite: true, // Ensure reports are overridden
         html: true,
         json: true,
       },
       mochaJunitReporterReporterOptions: {
-        mochaFile: "cypress/reports/junit/results.xml", // 👈 Fixed to override instead of creating new files
+        mochaFile: "cypress/reports/junit/results.xml", // Fixed to override instead of creating new files
         toConsole: true,
       },
     },
-
-    setupNodeEvents: async (on, config) => {
-      // Add Cucumber Preprocessor Plugin
-      await addCucumberPreprocessorPlugin(on, config);
-      // Set up Esbuild for preprocessing
-      on(
-        "file:preprocessor",
-        createBundler({
+    async setupNodeEvents(on, config) {
+      const fixedOn = fix(on);
+      await addCucumberPreprocessorPlugin(fixedOn, config);
+      await configureXrayPlugin(fixedOn, config, {
+        jira: {
+          projectKey: "PP",
+          url: "https://artemishealth.atlassian.net/",
+        },
+        xray: {
+          status: {
+            step: {
+              skipped: "SKIPPED",
+            },
+          },
+          uploadResults: true,
+        },
+        cucumber: {
+          featureFileExtension: ".feature",
+          prefixes: {
+            test: undefined,
+          },
+        },
+      });
+      fixedOn("file:preprocessor", async (file) => {
+        await syncFeatureFile(file);
+        const cucumberPlugin = createBundler({
           plugins: [createEsbuildPlugin(config)],
-        })
-      );
+        });
+        return cucumberPlugin(file);
+      });
 
-      
-      return config; // Return updated config
+      return config;
     },
   },
 });

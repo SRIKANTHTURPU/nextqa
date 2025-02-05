@@ -28,5 +28,11 @@
     "mochawesome-merge": "^5.0.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.3"
+  },
+  "cypress-cucumber-preprocessor": {
+    "json": {
+      "enabled": true,
+      "output": "cypress/reports/cucumber-json/results.json"
+    }
   }
 }
